@@ -1,0 +1,256 @@
+#!/usr/bin/env ruby
+#
+# Linux Transparent Proxy
+# By L
+#
+
+require 'yaml'
+require 'ipaddr'
+require 'optparse'
+
+
+class LTPorxy
+  VERSION     = '0.0.1'
+  ChainName   = 'LLTPROXY'
+  LTProxyUser = 'ltproxy'
+  StartPort   = 60633
+
+  attr_reader :cmds
+
+  def initialize(conf_file)
+    @cmds = []
+    read_config conf_file
+  end
+
+  def check_config_filename(filename)
+    if filename.nil?
+      [ 'ltproxy.yml', '~/.ltproxy.yml', '/etc/ltproxy.yml'].each do |filename|
+        file_path = File.expand_path filename
+        if File.file?(file_path) and File.readable?(file_path)
+          @conf_file = filename
+          break
+        end
+      end
+    else
+      @conf_file = filename
+    end
+
+    if @conf_file
+      puts "[+] Current configuration: #{@conf_file}"
+    else
+      abort "[!] Can't find configuration file"
+    end
+  end
+
+  def start
+    check_config
+
+    # check ltproxy user
+    @cmds << "id -u #{LTProxyUser} || useradd -s /sbin/nologin #{LTProxyUser}"
+
+    @cmds << "iptables -t nat -N #{ChainName}"
+    @cmds << "iptables -t nat -F #{ChainName}"
+    @cmds << "iptables -t nat -A PREROUTING -p tcp -j #{ChainName}"
+    @cmds << "iptables -t nat -A OUTPUT -p tcp -m owner ! --uid-owner #{LTProxyUser} -j #{ChainName}"
+
+    listen_port = StartPort
+
+    @conf['rules'].each do |rule|
+      proxies = rule['proxies']
+      targets = rule['target']
+
+      direct = ( proxies.first == 'direct' )
+      # ipt2socks program
+      unless direct
+        proxy_type, proxy_host, proxy_port, proxy_user, proxy_pass = proxies.pop.split
+        proxy_cmd = "ipt2socks -R -n 9999 -u #{LTProxyUser} -s #{proxy_host} -p #{proxy_port} -l #{listen_port}"
+        if proxy_pass
+          proxy_cmd += " --auth-username #{proxy_user.dump}"
+          proxy_cmd += " --auth-password #{proxy_pass.dump}"
+        end
+        proxychains_conf_filename = nil
+        unless proxies.empty?
+          proxychains_conf_filename = "/tmp/ltproxy_proxychains_#{listen_port}_conf"
+          proxychains_conf_cmd = <<~CONF
+            cat \<<EOF > #{proxychains_conf_filename}
+            strict_chain
+            proxy_dns
+            tcp_read_time_out 15000
+            tcp_connect_time_out 8000
+            [ProxyList]
+            #{proxies.join("\n")}
+            EOF
+          CONF
+          @cmds << proxychains_conf_cmd
+          proxy_cmd = "proxychains4 -q -f #{proxychains_conf_filename} #{proxy_cmd}"
+        end
+        @cmds << "nohup #{proxy_cmd} &"
+        @cmds << "rm -f #{proxychains_conf_filename}" if proxychains_conf_filename
+      end
+
+      # iptables rules
+      targets.each do |target|
+        target_expr = target_parse(target)
+        cmd =
+          if direct
+            "iptables -t nat -A #{ChainName} -p tcp #{target_expr} -j RETURN"
+          else
+            "iptables -t nat -A #{ChainName} -p tcp #{target_expr} -j REDIRECT --to-port #{listen_port}"
+          end
+        @cmds << cmd
+      end
+
+      listen_port += 1
+    end
+  end
+
+  def stop
+    @cmds << "iptables -t nat -D PREROUTING -p tcp -j #{ChainName}"
+    @cmds << "iptables -t nat -D OUTPUT -p tcp -m owner ! --uid-owner #{LTProxyUser} -j #{ChainName}"
+    @cmds << "iptables -t nat -F #{ChainName}"
+    @cmds << "iptables -t nat -X #{ChainName}"
+    @cmds << "killall -u #{LTProxyUser} ipt2socks"
+  end
+
+  def ipnet_format(str)
+    target =
+      if str.end_with? '.*'
+        str.sub('.*.*.*', '.0.0.0/8').sub('.*.*', '.0.0/16').sub('.*', '.0/24')
+      else
+        str
+      end
+    raise IPAddr::InvalidAddressError unless target.match? /^(\d{1,3}\.){3}\d{1,3}(\/\d{1,2})?$/
+    IPAddr.new(target)
+    target
+  rescue IPAddr::InvalidAddressError
+    abort "[!] [#{@conf_file}] [target] parsing error: #{str}"
+  end
+
+  def ports_format(str)
+    ports = str.split(',')
+    ports.each do |port|
+      if port.include? '-'
+        raise unless port.match? /^\d+-\d+$/
+        sport, eport = port.split('-', 2).map(&:to_i)
+        raise if sport >= eport 
+        raise if sport > 65535 or sport <= 0
+        raise if eport > 65535 or eport <= 0
+      else
+        raise unless port.match? /^\d+$/
+        raise if port.to_i > 65535 or port.to_i <= 0
+      end
+    end
+    str.tr('-', ':')
+  rescue RuntimeError
+    abort "[!] [#{@conf_file}] [target port] parsing error: #{str}"
+  end
+
+  def read_config(filename)
+    check_config_filename(filename)
+    @conf = YAML.load_file(File.expand_path(@conf_file))
+  rescue Psych::SyntaxError
+    abort '[!] Configuration file format error'
+  end
+
+  def check_config
+    rules = @conf['rules']
+    abort '[!] Rule is empty' if rules.nil? or rules.empty?
+
+    rules.each do |rule|
+      # check proxies
+      proxies = rule['proxies']
+      abort '[!] No empty proxies are allowed' if proxies.nil? or proxies.empty?
+      last_index = proxies.size - 1
+      if proxies.first != 'direct'
+        proxies.each_with_index do |proxy, i|
+          type, host, port, user, pass = proxy.split(/\s+/, 5)
+          abort "[!] Socks password cannot be empty: #{proxy}" if user and pass.nil?
+          abort "[!] Wrong socks host address: #{proxy}" if host.include?('/')
+          IPAddr.new(host) rescue abort "[!] Wrong socks host address: #{proxy}"
+          abort "[!] Wrong socks port: #{proxy}" if port.to_i > 65535 or port.to_i <= 0
+          abort "[!] Wrong socks type: #{proxy}" unless %w{ socks5 socks4 socks4a }.include? type
+          abort "[!] Currently ipt2socks only supports socks5: #{proxy}" if i == last_index and type != 'socks5'
+        end
+      end
+
+      # check targets
+      targets = rule['target']
+      abort '[!] No empty targets are allowed' if targets.nil? or targets.empty?
+      targets.each do |target|
+      end
+    end
+  end
+
+  def target_parse(str)
+    target, port = str.split(/\s+/, 2)
+    target =
+      case target
+      when 'any'
+        ''
+      when 'intranet'
+        '-d 192.168.0.0/16,172.16.0.0/12,10.0.0.0/8'
+      when 'extranet'
+        @cmds << "iptables -t nat -A #{ChainName} -d 0.0.0.0/8,10.0.0.0/8,100.64.0.0/10,127.0.0.0/8,169.254.0.0/16,172.16.0.0/12,192.168.0.0/16,198.18.0.0/15,224.0.0.0/4,240.0.0.0/4 -j RETURN"
+        ''
+      else
+        "-d #{ipnet_format(target)}"
+      end
+
+    if port
+      port = ports_format(port)
+
+      if port.include? ','
+        target += " -m multiport --dports #{port}"
+      else
+        target += " --dport #{port}"
+      end
+    end
+    target
+  end
+
+end
+
+options = {}
+option_parser = OptionParser.new { |opts|
+  opts.banner = "Usage: ltproxy <start|restart|stop|version>"
+
+  opts.on("-d", "--debug", "Debug mode, do not execute commands") do |v|
+    options[:debug] = true
+  end
+
+  opts.on("-f FILE", "--file", "Specify the configuration file") do |v|
+    options[:file] = v
+  end
+}
+option_parser.parse!
+
+
+@filename = options[:file]
+action = ARGV[0]
+case action
+when 'start', 'restart'
+  ltproxy = LTPorxy.new(@filename)
+  ltproxy.stop
+  ltproxy.start
+when 'stop'
+  ltproxy = LTPorxy.new(@filename)
+  ltproxy.stop
+when 'version'
+  puts LTPorxy::VERSION
+  exit
+else
+  puts option_parser
+  exit
+end
+
+shell_script = ltproxy.cmds.join("\n")
+abort shell_script if options[:debug]
+
+abort '[!] Only supports linux' unless RUBY_PLATFORM.include? 'linux'
+abort '[!] Need root to run' if Process.uid != 0
+`echo #{[shell_script].pack('m0')} | base64 -d | /bin/sh >/dev/null 2>/dev/null`
+if action == 'stop'
+  puts "[+] Service shutdown successfully"
+else
+  puts "[+] Successfully started"
+end
