@@ -1,6 +1,6 @@
 # LTPorxy
 
-**LTProxy** 是一个 Linux 上 **Proxifier** 的替代方案 (基于 `iptables + proxychains4 + ipt2socks` 实现)
+**LTProxy** 是一个 Linux 上 **Proxifier** 的透明代理链替代方案 (基于 `iptables + proxychains4 + ipt2socks` 实现)
 
 > 还在为不断 `proxychains4 cmd` 而感到苦恼吗? :)
 
@@ -85,7 +85,7 @@ rules:
     target:
       - 192.168.12.*
 
-  # 19.0.0.0/8、1.1.1.1、18.7.0.0/16 和 172/168/10 等内网网段走这个三层的代理链透明代理
+  # 19.0.0.0/8、1.1.1.1、18.7.0.0/16、 172/168/10和内网网段的22/7000-9000端口走这个三层的代理链透明代理
   - proxies:
       - socks5 12.12.12.12 1080 twelve password
       - socks4 172.16.1.2 1088
@@ -93,7 +93,7 @@ rules:
     target:
       - 19.*.*.*
       - 1.1.1.1
-      - intranet
+      - intranet 22,7000-9000
       - 18.7.0.0/16
 
   # 其它外网的 IP 通过 socks5:21.21.21.21:1080 透明代理访问
