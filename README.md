@@ -3,12 +3,13 @@
 **LTProxy** 是一个 Linux 上 **Proxifier** 的替代方案 (基于 `iptables + proxychains4 + ipt2socks` 实现)
 
 > 还在为不断 `proxychains4 cmd` 而感到苦恼吗? :)
+
 > 此工具仅限于安全研究和教学，用户承担因使用此工具而导致的所有法律和相关责任！ 作者不承担任何法律和相关责任！
 
 
 ## Version
 
-0.0.1 - [版本修改日志](CHANGELOG.md)
+0.0.1
 
 
 ## Features
@@ -30,14 +31,14 @@
    配置文件会以下面顺序依次尝试读取配置文件
      './ltproxy.yml' -> '~/.ltproxy.yml' -> '/etc/ltproxy.yml'
    或启动时，通过 -f 参数指定配置文件
-   # NOTE cp config_demo.yml /etc/ltproxy.yml 即可快速编辑开始
+   # cp config_demo.yml /etc/ltproxy.yml 即可快速编辑开始
 
 2. 启动 ltproxy 透明代理
-  ./ltproxy start  # NOTE ltproxy 需要以 root 权限运行
+  ./ltproxy start  # ltproxy 需要以 root 权限运行
                    # 并且初次运行会自动创建 ltproxy 用户给予 ipt2socks 使用
 
-  # NOTE 如更新 ltproxy.yml 配置文件则需要重新启动，如下
-  ./ltproxy restart # NOTE 其实 start 等价于 restart
+  # 如更新 ltproxy.yml 配置文件则需要重新启动，如下
+  ./ltproxy restart # start 等价于 restart
 
 3. 关闭 ltproxy 透明代理
   ./ltproxy stop
@@ -47,7 +48,7 @@
 
 #### Format
 - 规则和代理链的优先级自上往下
-```ruby
+```yaml
 # 语法格式
 rules:
   - proxies:
@@ -66,7 +67,7 @@ rules:
     port          代理端口
     username      如需认证可添上
     password      如需认证可添上
-    # NOTE proxy 一列，也可以直接用 direct 表示跳过不走透明代理链
+    # proxy 一列，也可以直接用 direct 表示跳过不走透明代理链
 # target
     target        需要透明代理的目标地址，支持格式：192.168.*.* 10.0.0.0/8 192.168.1.1 等
                   还支持别名 intranet extranet any，用于内网、外网和所有的选择
