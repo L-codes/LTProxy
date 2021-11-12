@@ -10,10 +10,11 @@ require 'optparse'
 
 
 class LTPorxy
-  VERSION     = '0.0.1'
+  VERSION     = '0.0.2'
   ChainName   = 'LLTPROXY'
   LTProxyUser = 'ltproxy'
   StartPort   = 60633
+  ConfigFilePriority = %w{ ltproxy.yml ~/.ltproxy.yml /etc/ltproxy.yml }
 
   attr_reader :cmds
 
@@ -24,7 +25,7 @@ class LTPorxy
 
   def check_config_filename(filename)
     if filename.nil?
-      [ 'ltproxy.yml', '~/.ltproxy.yml', '/etc/ltproxy.yml'].each do |filename|
+      ConfigFilePriority.each do |filename|
         file_path = File.expand_path filename
         if File.file?(file_path) and File.readable?(file_path)
           @conf_file = filename
@@ -51,6 +52,7 @@ class LTPorxy
     @cmds << "iptables -t nat -N #{ChainName}"
     @cmds << "iptables -t nat -F #{ChainName}"
     @cmds << "iptables -t nat -A PREROUTING -p tcp -j #{ChainName}"
+    @cmds << "iptables -t nat -A #{ChainName} -p tcp -m owner --uid-owner #{LTProxyUser} -j RETURN"
     @cmds << "iptables -t nat -A OUTPUT -p tcp -m owner ! --uid-owner #{LTProxyUser} -j #{ChainName}"
 
     listen_port = StartPort
@@ -70,7 +72,7 @@ class LTPorxy
         end
         proxychains_conf_filename = nil
         unless proxies.empty?
-          proxychains_conf_filename = "/tmp/ltproxy_proxychains_#{listen_port}_conf"
+          proxychains_conf_filename = "/tmp/.ltproxy_proxychains_#{listen_port}_conf"
           proxychains_conf_cmd = <<~CONF
             cat \<<EOF > #{proxychains_conf_filename}
             strict_chain

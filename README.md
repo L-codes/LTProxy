@@ -9,7 +9,7 @@
 
 ## Version
 
-0.0.1
+0.0.2 - [版本修改日志](CHANGELOG.md)
 
 
 ## Features
