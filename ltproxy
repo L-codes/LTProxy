@@ -10,7 +10,7 @@ require 'optparse'
 
 
 class LTPorxy
-  VERSION     = '0.0.2'
+  VERSION     = '0.0.3'
   ChainName   = 'LLTPROXY'
   LTProxyUser = 'ltproxy'
   StartPort   = 60633
@@ -37,7 +37,7 @@ class LTPorxy
     end
 
     if @conf_file
-      puts "[+] Current configuration: #{@conf_file}"
+      puts "[+] [Version #{VERSION}] Current configuration: #{@conf_file}"
     else
       abort "[!] Can't find configuration file"
     end
@@ -87,7 +87,6 @@ class LTPorxy
           proxy_cmd = "proxychains4 -q -f #{proxychains_conf_filename} #{proxy_cmd}"
         end
         @cmds << "nohup #{proxy_cmd} &"
-        @cmds << "rm -f #{proxychains_conf_filename}" if proxychains_conf_filename
       end
 
       # iptables rules
@@ -112,6 +111,7 @@ class LTPorxy
     @cmds << "iptables -t nat -F #{ChainName}"
     @cmds << "iptables -t nat -X #{ChainName}"
     @cmds << "killall -u #{LTProxyUser} ipt2socks"
+    @cmds << "rm -f /tmp/.ltproxy_proxychains_*_conf"
   end
 
   def ipnet_format(str)
