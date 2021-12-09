@@ -2,7 +2,8 @@
 
 **LTProxy** 是一个 Linux 上 **Proxifier** 的透明代理链替代方案 (基于 `iptables + proxychains4 + ipt2socks` 实现)
 
-> 还在为不断 `proxychains4 cmd` 而感到苦恼吗? :)
+> 还在为不断 `proxychains4 cmd` 而感到苦恼吗? 还在为 golang 等程序无法使用 proxychains 而感到苦恼吗? 无感的透明代理最方便舒服! :)
+
 
 > 此工具仅限于安全研究和教学，用户承担因使用此工具而导致的所有法律和相关责任！ 作者不承担任何法律和相关责任！
 
