@@ -25,7 +25,7 @@
 
 ## Usage
 ```ruby
-0. 需安装好 proxychains4 和 ipt2socks 的环境
+0. 需安装好 ruby、proxychains4 和 ipt2socks 的环境 (ruby 需要 3.0+)
    $ command -v ruby proxychains4 ipt2socks  # 确保 shell 环境都能找到
 
 1. 配置 ltproxy.yml 文件 (具体配置示例与语法参考下面的 "LTProxy Config File")
