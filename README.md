@@ -10,7 +10,7 @@
 
 ## Version
 
-0.0.3 - [版本修改日志](CHANGELOG.md)
+0.0.4 - [版本修改日志](CHANGELOG.md)
 
 
 ## Features
@@ -44,6 +44,8 @@
 3. 关闭 ltproxy 透明代理
   ./ltproxy stop
 ```
+
+> 注意当 `ltproxy` 和 `socks` 的服务运行在一个主机上的话，`socks` 的服务需要使用 `ltproxy` 用户运行，如: `sudo -u ltproxy ./socks5 -l xxxx`
 
 ## LTProxy Config File
 

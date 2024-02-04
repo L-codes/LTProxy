@@ -10,7 +10,7 @@ require 'optparse'
 
 
 class LTPorxy
-  VERSION     = '0.0.3'
+  VERSION     = '0.0.4'
   ChainName   = 'LLTPROXY'
   LTProxyUser = 'ltproxy'
   StartPort   = 60633
@@ -52,7 +52,6 @@ class LTPorxy
     @cmds << "iptables -t nat -N #{ChainName}"
     @cmds << "iptables -t nat -F #{ChainName}"
     @cmds << "iptables -t nat -A PREROUTING -p tcp -j #{ChainName}"
-    @cmds << "iptables -t nat -A #{ChainName} -p tcp -m owner --uid-owner #{LTProxyUser} -j RETURN"
     @cmds << "iptables -t nat -A OUTPUT -p tcp -m owner ! --uid-owner #{LTProxyUser} -j #{ChainName}"
 
     listen_port = StartPort
@@ -65,7 +64,7 @@ class LTPorxy
       # ipt2socks program
       unless direct
         proxy_type, proxy_host, proxy_port, proxy_user, proxy_pass = proxies.pop.split
-        proxy_cmd = "ipt2socks -R -n 9999 -u #{LTProxyUser} -s #{proxy_host} -p #{proxy_port} -l #{listen_port}"
+        proxy_cmd = "ipt2socks -R -n 9999 -j 50 -u #{LTProxyUser} -s #{proxy_host} -p #{proxy_port} -l #{listen_port}"
         if proxy_pass
           proxy_cmd += " --auth-username #{proxy_user.dump}"
           proxy_cmd += " --auth-password #{proxy_pass.dump}"
